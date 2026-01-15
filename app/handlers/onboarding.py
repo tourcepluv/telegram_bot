@@ -3,8 +3,7 @@ from __future__ import annotations
 import json
 import secrets
 
-from aiogram import Router
-from aiogram.filters import Text
+from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
@@ -47,14 +46,14 @@ def _build_auto_name(platform: str) -> str:
     return f"{prefix}-{secrets.token_hex(6)}"
 
 
-@router.callback_query(Text("start_onboarding"))
+@router.callback_query(F.data == "start_onboarding")
 async def start_onboarding(query: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(OnboardingState.choosing_tariff)
     await query.message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
     await query.answer()
 
 
-@router.callback_query(Text("promo_skip"))
+@router.callback_query(F.data == "promo_skip")
 async def promo_skip(query: CallbackQuery, session: AsyncSession) -> None:
     user = await get_or_create_user(session, query.from_user.id, query.from_user.username, secrets.token_hex(4))
     await set_user_flags(session, user.id, has_seen_promo_prompt=True)
@@ -62,7 +61,7 @@ async def promo_skip(query: CallbackQuery, session: AsyncSession) -> None:
     await query.answer()
 
 
-@router.callback_query(Text("promo_enter"))
+@router.callback_query(F.data == "promo_enter")
 async def promo_enter(query: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
     user = await get_or_create_user(session, query.from_user.id, query.from_user.username, secrets.token_hex(4))
     await set_user_flags(session, user.id, has_seen_promo_prompt=True)
@@ -114,7 +113,7 @@ async def platform_selected(query: CallbackQuery, callback_data: PlatformCallbac
     await query.answer()
 
 
-@router.callback_query(Text("skip_device_name"))
+@router.callback_query(F.data == "skip_device_name")
 async def skip_name(query: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
     data = await state.get_data()
     platform = data["platform"]
@@ -147,7 +146,7 @@ async def _finish_device_setup(message: Message, state: FSMContext, display_name
     )
 
 
-@router.callback_query(Text("topup_prepare"))
+@router.callback_query(F.data == "topup_prepare")
 async def topup_prepare(query: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
     data = await state.get_data()
     tariff_code = data.get("tariff_code", "T1")

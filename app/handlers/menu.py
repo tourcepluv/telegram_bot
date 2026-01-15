@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import secrets
 
-from aiogram import Router
-from aiogram.filters import Text
+from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +18,7 @@ from app.handlers.onboarding import OnboardingState
 router = Router()
 
 
-@router.message(Text("💰 Баланс"))
+@router.message(F.text == "💰 Баланс")
 async def balance_view(message: Message, session: AsyncSession, state: FSMContext) -> None:
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
     active_devices = await list_active_devices(session, user.id)
@@ -45,21 +44,21 @@ async def balance_view(message: Message, session: AsyncSession, state: FSMContex
     )
 
 
-@router.message(Text("🆘 Помощь"))
+@router.message(F.text == "🆘 Помощь")
 async def help_view(message: Message) -> None:
     from app.config import settings
 
     await message.answer(help_text(settings.support_username), reply_markup=help_keyboard())
 
 
-@router.message(Text("📱 Мои устройства"))
+@router.message(F.text == "📱 Мои устройства")
 async def devices_menu(message: Message, session: AsyncSession) -> None:
     from app.handlers.devices import show_devices
 
     await show_devices(message, session)
 
 
-@router.callback_query(Text("open_devices"))
+@router.callback_query(F.data == "open_devices")
 async def open_devices_callback(query: CallbackQuery, session: AsyncSession) -> None:
     from app.handlers.devices import show_devices
 
@@ -67,7 +66,7 @@ async def open_devices_callback(query: CallbackQuery, session: AsyncSession) -> 
     await query.answer()
 
 
-@router.message(Text("➕ Добавить устройство"))
+@router.message(F.text == "➕ Добавить устройство")
 async def add_device(message: Message, state: FSMContext) -> None:
     await state.set_state(OnboardingState.choosing_tariff)
     await state.update_data(action="add_device")
@@ -78,7 +77,7 @@ async def add_device(message: Message, state: FSMContext) -> None:
     await message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
 
 
-@router.message(Text("💳 Пополнить"))
+@router.message(F.text == "💳 Пополнить")
 async def topup_menu(message: Message, session: AsyncSession, state: FSMContext) -> None:
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
     devices = await list_user_devices(session, user.id)
@@ -95,7 +94,7 @@ async def topup_menu(message: Message, session: AsyncSession, state: FSMContext)
     )
 
 
-@router.message(Text("🎁 Рефералы"))
+@router.message(F.text == "🎁 Рефералы")
 async def referral_view(message: Message, session: AsyncSession) -> None:
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
     link = f"https://t.me/{message.bot.username}?start=ref_{user.referral_code}"

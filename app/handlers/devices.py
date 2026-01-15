@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import secrets
 
-from aiogram import Bot, Router
-from aiogram.filters import Text
+from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
@@ -64,7 +63,7 @@ async def show_devices(message: Message, session: AsyncSession) -> None:
     await message.answer(text, reply_markup=devices_overview_keyboard(bool(devices)))
 
 
-@router.callback_query(Text("devices_manage"))
+@router.callback_query(F.data == "devices_manage")
 async def devices_manage(query: CallbackQuery, session: AsyncSession) -> None:
     user = await get_or_create_user(session, query.from_user.id, query.from_user.username, secrets.token_hex(4))
     devices = await list_user_devices(session, user.id)
@@ -77,7 +76,7 @@ async def devices_manage(query: CallbackQuery, session: AsyncSession) -> None:
     await query.answer()
 
 
-@router.callback_query(Text("devices_add"))
+@router.callback_query(F.data == "devices_add")
 async def devices_add(query: CallbackQuery, state: FSMContext) -> None:
     from app.content.texts import tariffs_message
     from app.handlers.onboarding import OnboardingState
@@ -90,7 +89,7 @@ async def devices_add(query: CallbackQuery, state: FSMContext) -> None:
     await query.answer()
 
 
-@router.message(Text("📱 Мои устройства"))
+@router.message(F.text == "📱 Мои устройства")
 async def devices_overview(message: Message, session: AsyncSession) -> None:
     await show_devices(message, session)
 
