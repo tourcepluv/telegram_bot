@@ -54,11 +54,10 @@ def skip_name_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def nearly_ready_keyboard(offer_url: str) -> InlineKeyboardMarkup:
+def nearly_ready_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="💳 Пополнить", callback_data="topup_prepare")],
-            [InlineKeyboardButton(text="Оферта", url=offer_url)],
         ]
     )
 

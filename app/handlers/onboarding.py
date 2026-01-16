@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.constants import AUTO_NAME_PREFIX, PLATFORM_LABELS, TARIFFS
-from app.content.texts import NEARLY_READY, PROMO_PROMPT, STEP_DEVICE, STEP_NAME, tariffs_message
+from app.content.texts import NEARLY_READY, PROMO_PROMPT, STEP_DEVICE, STEP_NAME_TEMPLATE, tariffs_message
 from app.db.repo import (
     count_promo_redemptions,
     get_or_create_user,
@@ -51,6 +51,16 @@ def _generate_internal_code() -> str:
 def _build_auto_name(platform: str) -> str:
     prefix = AUTO_NAME_PREFIX[platform]
     return f"{prefix}-{secrets.token_hex(6)}"
+
+
+def _device_name_example(platform: str) -> str:
+    examples = {
+        "ios": "iPhone",
+        "android": "Android",
+        "macos": "MacBook",
+        "windows": "Рабочий",
+    }
+    return examples.get(platform, "Рабочий")
 
 
 @router.callback_query(F.data == "start_onboarding")
@@ -126,7 +136,10 @@ async def tariff_selected(query: CallbackQuery, callback_data: TariffCallback, s
 async def platform_selected(query: CallbackQuery, callback_data: PlatformCallback, state: FSMContext) -> None:
     await state.update_data(platform=callback_data.platform)
     await state.set_state(OnboardingState.choosing_name)
-    await query.message.answer(STEP_NAME, reply_markup=skip_name_keyboard())
+    await query.message.answer(
+        STEP_NAME_TEMPLATE.format(example=_device_name_example(callback_data.platform)),
+        reply_markup=skip_name_keyboard(),
+    )
     await query.answer()
 
 
@@ -156,10 +169,11 @@ async def _finish_device_setup(message: Message, state: FSMContext, display_name
         "tariff_name": tariff.name,
         "monthly_price": tariff.monthly_price_rub,
         "balance": user.balance_kopeks // 100,
+        "offer_url": settings.offer_url,
     }
     await message.answer(
         NEARLY_READY.format(**user_data),
-        reply_markup=nearly_ready_keyboard(settings.offer_url),
+        reply_markup=nearly_ready_keyboard(),
     )
 
 
@@ -171,7 +185,9 @@ async def topup_prepare(query: CallbackQuery, state: FSMContext, session: AsyncS
     tariff = TARIFFS[tariff_code]
     amounts = _amounts_for_tariff(tariff_code)
     await query.message.answer(
-        f"Выберите сумму пополнения (стоимость {tariff.monthly_price_rub} ₽/мес):",
+        "💳 Выберите сумму пополнения\n"
+        f"Стоимость тарифа: {tariff.monthly_price_rub} ₽/мес\n\n"
+        "Можно пополнить сразу на несколько месяцев.",
         reply_markup=topup_amounts_keyboard(amounts, context=action),
     )
     await query.answer()

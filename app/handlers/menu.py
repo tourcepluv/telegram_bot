@@ -23,6 +23,7 @@ async def balance_view(message: Message, session: AsyncSession, state: FSMContex
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
     active_devices = await list_active_devices(session, user.id)
     daily_cost = await get_daily_cost(session, user.id)
+    monthly_cost = sum(TARIFFS[device.tariff_code].monthly_price_rub for device in active_devices)
     if daily_cost > 0:
         days_left = user.balance_kopeks // daily_cost
         days_text = str(days_left)
@@ -37,7 +38,7 @@ async def balance_view(message: Message, session: AsyncSession, state: FSMContex
         BALANCE_TEMPLATE.format(
             balance=user.balance_kopeks // 100,
             active_devices=len(active_devices),
-            daily_cost=daily_cost // 100,
+            monthly_cost=monthly_cost,
             days_left=days_text,
         ),
         reply_markup=balance_keyboard(),
@@ -90,7 +91,9 @@ async def topup_menu(message: Message, session: AsyncSession, state: FSMContext)
 
     tariff = TARIFFS[tariff_code]
     await message.answer(
-        f"Выберите сумму пополнения (стоимость {tariff.monthly_price_rub} ₽/мес):",
+        "💳 Выберите сумму пополнения\n"
+        f"Стоимость тарифа: {tariff.monthly_price_rub} ₽/мес\n\n"
+        "Можно пополнить сразу на несколько месяцев.",
         reply_markup=topup_amounts_keyboard(_amounts_for_tariff(tariff_code), context="topup"),
     )
 
