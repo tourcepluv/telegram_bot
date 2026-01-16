@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     marzban_api_token: str = Field(..., env="MARZBAN_API_TOKEN")
     marzban_level: int = Field(1, env="MARZBAN_LEVEL")
     marzban_limit_ip: int = Field(2, env="MARZBAN_LIMIT_IP")
+    marzban_proxies: str = Field("vless,vmess,shadowsocks", env="MARZBAN_PROXIES")
 
     eu_server_tags: str = Field("SERVER_AEZA_GERM_1", env="EU_SERVER_TAGS")
     ru_server_tags: str = Field("SERVER_YANDEX_1", env="RU_SERVER_TAGS")
@@ -51,6 +52,10 @@ class Settings(BaseSettings):
     @property
     def ru_tags_list(self) -> list[str]:
         return [item.strip() for item in self.ru_server_tags.split(",") if item.strip()]
+
+    @property
+    def marzban_proxy_list(self) -> list[str]:
+        return [item.strip().lower() for item in self.marzban_proxies.split(",") if item.strip()]
 
 
 settings = Settings()

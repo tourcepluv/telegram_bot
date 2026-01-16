@@ -171,17 +171,21 @@ async def yookassa_webhook(request: Request) -> JSONResponse:
                 server_tags_csv=",".join(server_tags),
             )
 
+            proxy_list = settings.marzban_proxy_list or ["vless"]
+            proxies: dict[str, dict] = {}
+            if "vless" in proxy_list:
+                proxies["vless"] = {"flow": "xtls-rprx-vision"}
+            if "vmess" in proxy_list:
+                proxies["vmess"] = {}
+            if "shadowsocks" in proxy_list:
+                proxies["shadowsocks"] = {}
             payload = {
                 "username": marzban_username,
                 "status": "active",
                 "expire": None,
                 "data_limit": 0,
                 "data_limit_reset_strategy": "no_reset",
-                "proxies": {
-                    "vless": {"flow": "xtls-rprx-vision"},
-                    "vmess": {},
-                    "shadowsocks": {},
-                },
+                "proxies": proxies,
                 "inbounds": {"vless": server_tags},
                 "note": TARIFFS[tariff_code].name,
                 "level": settings.marzban_level,
