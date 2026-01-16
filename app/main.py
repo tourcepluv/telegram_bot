@@ -5,6 +5,7 @@ import json
 import secrets
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Update
 from fastapi import FastAPI, Request
@@ -53,7 +54,7 @@ class DependenciesMiddleware:
             return await handler(event, data)
 
 
-bot = Bot(token=settings.bot_token, parse_mode="HTML")
+bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode="HTML"))
 
 storage = MemoryStorage()
 
