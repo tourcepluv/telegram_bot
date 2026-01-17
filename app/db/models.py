@@ -19,6 +19,9 @@ class User(Base):
     has_seen_promo_prompt: Mapped[bool] = mapped_column(Boolean, default=False)
     has_made_first_payment: Mapped[bool] = mapped_column(Boolean, default=False)
     referral_code: Mapped[str] = mapped_column(String(32), unique=True)
+    last_balance_reminder_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    last_pause_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    last_pause_reminder_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     devices: Mapped[list[Device]] = relationship("Device", back_populates="owner")
 
