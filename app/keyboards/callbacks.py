@@ -23,3 +23,7 @@ class DeviceSelectCallback(CallbackData, prefix="device_select"):
 class TopUpCallback(CallbackData, prefix="topup"):
     amount: int
     context: str
+
+
+class SubscriptionCopyCallback(CallbackData, prefix="copy_sub"):
+    url: str

@@ -20,6 +20,10 @@ router = Router()
 
 @router.message(F.text == "💰 Баланс")
 async def balance_view(message: Message, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        await message.delete()
+    except Exception:  # noqa: BLE001
+        pass
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
     active_devices = await list_active_devices(session, user.id)
     daily_cost = await get_daily_cost(session, user.id)
@@ -49,6 +53,10 @@ async def balance_view(message: Message, session: AsyncSession, state: FSMContex
 async def help_view(message: Message) -> None:
     from app.config import settings
 
+    try:
+        await message.delete()
+    except Exception:  # noqa: BLE001
+        pass
     await message.answer(help_text(settings.support_username), reply_markup=help_keyboard())
 
 
@@ -56,6 +64,10 @@ async def help_view(message: Message) -> None:
 async def devices_menu(message: Message, session: AsyncSession) -> None:
     from app.handlers.devices import show_devices
 
+    try:
+        await message.delete()
+    except Exception:  # noqa: BLE001
+        pass
     await show_devices(message, session)
 
 
@@ -67,19 +79,40 @@ async def open_devices_callback(query: CallbackQuery, session: AsyncSession) -> 
     await query.answer()
 
 
+@router.callback_query(F.data == "open_referral")
+async def referral_callback(query: CallbackQuery, session: AsyncSession) -> None:
+    user = await get_or_create_user(session, query.from_user.id, query.from_user.username, secrets.token_hex(4))
+    link = f"https://t.me/{query.message.bot.username}?start=ref_{user.referral_code}"
+    await query.message.answer(
+        f"🎁 Пригласить друга (+50 ₽)\n{link}\n\n"
+        "Приглашайте друзей и получайте бонусы после их первой оплаты.",
+        reply_markup=main_menu(),
+    )
+    await query.answer()
+
+
 @router.message(F.text == "➕ Добавить устройство")
 async def add_device(message: Message, state: FSMContext) -> None:
+    try:
+        await message.delete()
+    except Exception:  # noqa: BLE001
+        pass
     await state.set_state(OnboardingState.choosing_tariff)
     await state.update_data(action="add_device")
     await message.answer("Выберите тариф для нового устройства:")
     from app.content.texts import tariffs_message
     from app.keyboards.inline import tariffs_keyboard
 
-    await message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+    prompt = await message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+    await state.update_data(tariffs_message_id=prompt.message_id)
 
 
 @router.message(F.text == "💳 Пополнить")
 async def topup_menu(message: Message, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        await message.delete()
+    except Exception:  # noqa: BLE001
+        pass
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
     devices = await list_user_devices(session, user.id)
     tariff_code = "T1"
@@ -100,6 +133,10 @@ async def topup_menu(message: Message, session: AsyncSession, state: FSMContext)
 
 @router.message(F.text == "🎁 Пригласить друга")
 async def referral_view(message: Message, session: AsyncSession) -> None:
+    try:
+        await message.delete()
+    except Exception:  # noqa: BLE001
+        pass
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
     link = f"https://t.me/{message.bot.username}?start=ref_{user.referral_code}"
     await message.answer(

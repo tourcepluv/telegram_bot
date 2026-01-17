@@ -71,16 +71,18 @@ async def start_onboarding(query: CallbackQuery, state: FSMContext, session: Asy
         await query.answer()
         return
     await state.set_state(OnboardingState.choosing_tariff)
-    await query.message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+    prompt = await query.message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+    await state.update_data(tariffs_message_id=prompt.message_id)
     await query.answer()
 
 
 @router.callback_query(F.data == "promo_skip")
-async def promo_skip(query: CallbackQuery, session: AsyncSession) -> None:
+async def promo_skip(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     user = await get_or_create_user(session, query.from_user.id, query.from_user.username, secrets.token_hex(4))
     await set_user_flags(session, user.id, has_seen_promo_prompt=True)
     await query.message.answer("Если что — промокод можно будет ввести позже в поддержке.")
-    await query.message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+    prompt = await query.message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+    await state.update_data(tariffs_message_id=prompt.message_id)
     await query.answer()
 
 
@@ -101,50 +103,67 @@ async def promo_code_entered(message: Message, state: FSMContext, session: Async
     if not promo or not promo.is_active:
         await message.answer("Промокод не найден или уже неактивен.")
         await state.set_state(OnboardingState.choosing_tariff)
-        await message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+        prompt = await message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+        await state.update_data(tariffs_message_id=prompt.message_id)
         return
     if await has_user_redeemed(session, promo.id, user.id):
         await message.answer("Вы уже использовали этот промокод.")
         await state.set_state(OnboardingState.choosing_tariff)
-        await message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+        prompt = await message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+        await state.update_data(tariffs_message_id=prompt.message_id)
         return
     if promo.max_uses is not None:
         redemptions = await count_promo_redemptions(session, promo.id)
         if redemptions >= promo.max_uses:
             await message.answer("Лимит промокода исчерпан.")
             await state.set_state(OnboardingState.choosing_tariff)
-            await message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+            prompt = await message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+            await state.update_data(tariffs_message_id=prompt.message_id)
             return
     await redeem_promo(session, promo.id, user.id)
     await update_user_balance(session, user.id, promo.bonus_kopeks)
     await message.answer(f"Бонус начислен: {promo.bonus_kopeks // 100} ₽")
     await state.set_state(OnboardingState.choosing_tariff)
-    await message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+    prompt = await message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
+    await state.update_data(tariffs_message_id=prompt.message_id)
 
 
 @router.callback_query(OnboardingState.choosing_tariff, TariffCallback.filter())
 async def tariff_selected(query: CallbackQuery, callback_data: TariffCallback, state: FSMContext) -> None:
     data = await state.get_data()
+    prev_id = data.get("tariffs_message_id")
+    if prev_id and query.message:
+        await query.message.delete()
     action = data.get("action", "onboarding")
     await state.update_data(tariff_code=callback_data.code, action=action)
     await state.set_state(OnboardingState.choosing_platform)
-    await query.message.answer(STEP_DEVICE, reply_markup=platform_keyboard())
+    prompt = await query.message.answer(STEP_DEVICE, reply_markup=platform_keyboard())
+    await state.update_data(device_prompt_id=prompt.message_id)
     await query.answer()
 
 
 @router.callback_query(OnboardingState.choosing_platform, PlatformCallback.filter())
 async def platform_selected(query: CallbackQuery, callback_data: PlatformCallback, state: FSMContext) -> None:
+    data = await state.get_data()
+    prev_id = data.get("device_prompt_id")
+    if prev_id and query.message:
+        await query.message.delete()
     await state.update_data(platform=callback_data.platform)
     await state.set_state(OnboardingState.choosing_name)
-    await query.message.answer(
+    prompt = await query.message.answer(
         STEP_NAME_TEMPLATE.format(example=_device_name_example(callback_data.platform)),
         reply_markup=skip_name_keyboard(),
     )
+    await state.update_data(name_prompt_id=prompt.message_id)
     await query.answer()
 
 
 @router.callback_query(F.data == "skip_device_name")
 async def skip_name(query: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    data = await state.get_data()
+    prev_id = data.get("name_prompt_id")
+    if prev_id and query.message:
+        await query.message.delete()
     data = await state.get_data()
     platform = data["platform"]
     display_name = _build_auto_name(platform)
@@ -160,6 +179,12 @@ async def name_entered(message: Message, state: FSMContext, session: AsyncSessio
 
 async def _finish_device_setup(message: Message, state: FSMContext, display_name: str, session: AsyncSession) -> None:
     data = await state.get_data()
+    prev_id = data.get("name_prompt_id")
+    if prev_id:
+        try:
+            await message.bot.delete_message(message.chat.id, prev_id)
+        except Exception:  # noqa: BLE001
+            pass
     tariff = TARIFFS[data["tariff_code"]]
     internal_code = _generate_internal_code()
     await state.update_data(display_name=display_name, internal_code=internal_code)
@@ -171,25 +196,31 @@ async def _finish_device_setup(message: Message, state: FSMContext, display_name
         "balance": user.balance_kopeks // 100,
         "offer_url": settings.offer_url,
     }
-    await message.answer(
+    ready_message = await message.answer(
         NEARLY_READY.format(**user_data),
         reply_markup=nearly_ready_keyboard(),
+        disable_web_page_preview=True,
     )
+    await state.update_data(ready_message_id=ready_message.message_id)
 
 
 @router.callback_query(F.data == "topup_prepare")
 async def topup_prepare(query: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
     data = await state.get_data()
+    prev_id = data.get("ready_message_id")
+    if prev_id and query.message:
+        await query.message.delete()
     tariff_code = data.get("tariff_code", "T1")
     action = data.get("action", "onboarding")
     tariff = TARIFFS[tariff_code]
     amounts = _amounts_for_tariff(tariff_code)
-    await query.message.answer(
+    prompt = await query.message.answer(
         "💳 Выберите сумму пополнения\n"
         f"Стоимость тарифа: {tariff.monthly_price_rub} ₽/мес\n\n"
         "Можно пополнить сразу на несколько месяцев.",
         reply_markup=topup_amounts_keyboard(amounts, context=action),
     )
+    await state.update_data(topup_prompt_id=prompt.message_id)
     await query.answer()
 
 
@@ -201,6 +232,10 @@ async def topup_amount(
     session: AsyncSession,
     yookassa: YooKassaClient,
 ) -> None:
+    data = await state.get_data()
+    prev_id = data.get("topup_prompt_id")
+    if prev_id and query.message:
+        await query.message.delete()
     data = await state.get_data()
     user = await get_or_create_user(session, query.from_user.id, query.from_user.username, secrets.token_hex(4))
     context = {
@@ -223,6 +258,14 @@ async def topup_amount(
 
     provider_id = payment.get("id")
     confirmation_url = payment.get("confirmation", {}).get("confirmation_url")
+    if confirmation_url:
+        invoice_message = await query.message.answer(
+            "Счёт на оплату\n\n"
+            f"💳 К оплате: {callback_data.amount} ₽\n"
+            f"Оплати по ссылке ниже:\n{confirmation_url}"
+        )
+        await state.update_data(invoice_message_id=invoice_message.message_id)
+        context["invoice_message_id"] = invoice_message.message_id
     await save_payment(
         session=session,
         owner_id=user.id,
@@ -232,12 +275,6 @@ async def topup_amount(
         provider_payment_id=provider_id,
         context=context,
     )
-    if confirmation_url:
-        await query.message.answer(
-            "Счёт на оплату\n\n"
-            f"💳 К оплате: {callback_data.amount} ₽\n"
-            f"Оплати по ссылке ниже:\n{confirmation_url}"
-        )
     await query.answer()
 
 

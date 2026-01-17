@@ -19,11 +19,13 @@ from app.db.repo import (
     update_device_subscription,
     update_device_tariff,
 )
-from app.keyboards.callbacks import DeviceActionCallback, DeviceSelectCallback, TariffCallback
+from app.keyboards.callbacks import DeviceActionCallback, DeviceSelectCallback, SubscriptionCopyCallback, TariffCallback
 from app.keyboards.inline import (
+    copy_subscription_keyboard,
     devices_actions_keyboard,
     devices_list_keyboard,
     devices_overview_keyboard,
+    invite_friend_keyboard,
     tariffs_keyboard,
 )
 from app.keyboards.reply import main_menu
@@ -116,14 +118,20 @@ async def device_action(
 
     if callback_data.action == "subscription":
         if device.subscription_url:
-            await query.message.answer(SUBSCRIPTION_MESSAGE.format(subscription_url=device.subscription_url))
+            await query.message.answer(
+                SUBSCRIPTION_MESSAGE.format(subscription_url=device.subscription_url),
+                reply_markup=copy_subscription_keyboard(device.subscription_url),
+            )
         else:
             try:
                 response = await marzban.get_user(device.marzban_username)
                 subscription_url = response.get("subscription_url")
                 if subscription_url:
                     await update_device_subscription(session, device.id, subscription_url)
-                    await query.message.answer(SUBSCRIPTION_MESSAGE.format(subscription_url=subscription_url))
+                    await query.message.answer(
+                        SUBSCRIPTION_MESSAGE.format(subscription_url=subscription_url),
+                        reply_markup=copy_subscription_keyboard(subscription_url),
+                    )
             except Exception as exc:  # noqa: BLE001
                 print(f"Marzban fetch error: {exc}")
                 await query.message.answer("Не удалось получить подписку. Попробуйте позже.")
@@ -131,7 +139,11 @@ async def device_action(
         if not device.subscription_url:
             await query.message.answer("Сначала получите подписку.")
         else:
-            await query.message.answer(get_instruction(device.platform, device.subscription_url))
+            await query.message.answer(
+                get_instruction(device.platform, device.subscription_url),
+                reply_markup=invite_friend_keyboard(),
+                disable_web_page_preview=True,
+            )
     elif callback_data.action == "change_tariff":
         await state.update_data(change_device_id=device.id)
         await state.set_state(DeviceState.changing_tariff)
@@ -144,7 +156,10 @@ async def device_action(
             subscription_url = response.get("subscription_url")
             if subscription_url:
                 await update_device_subscription(session, device.id, subscription_url)
-                await query.message.answer(SUBSCRIPTION_MESSAGE.format(subscription_url=subscription_url))
+                await query.message.answer(
+                    SUBSCRIPTION_MESSAGE.format(subscription_url=subscription_url),
+                    reply_markup=copy_subscription_keyboard(subscription_url),
+                )
         except Exception as exc:  # noqa: BLE001
             print(f"Marzban reissue error: {exc}")
             await query.message.answer("Не удалось перевыпустить ключ.")
@@ -160,6 +175,12 @@ async def device_action(
             await release_server(session, tag)
         await query.message.answer("Устройство удалено.")
     await query.answer()
+
+
+@router.callback_query(SubscriptionCopyCallback.filter())
+async def subscription_copy(query: CallbackQuery, callback_data: SubscriptionCopyCallback) -> None:
+    await query.message.answer(callback_data.url, disable_web_page_preview=True)
+    await query.answer("Ссылка отправлена.")
 
 
 @router.callback_query(DeviceState.changing_tariff, TariffCallback.filter())
@@ -218,10 +239,11 @@ async def send_subscription_and_instruction(
     await bot.send_message(
         user_id,
         SUBSCRIPTION_MESSAGE.format(subscription_url=device.subscription_url),
-        reply_markup=main_menu(),
+        reply_markup=copy_subscription_keyboard(device.subscription_url),
     )
     await bot.send_message(
         user_id,
         get_instruction(device.platform, device.subscription_url),
-        reply_markup=main_menu(),
+        reply_markup=invite_friend_keyboard(),
+        disable_web_page_preview=True,
     )

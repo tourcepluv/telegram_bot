@@ -141,6 +141,12 @@ async def yookassa_webhook(request: Request) -> JSONResponse:
                 await mark_referral_rewarded(session, referral.id)
 
         context = json.loads(payment.context_json)
+        invoice_message_id = context.get("invoice_message_id")
+        if isinstance(invoice_message_id, int):
+            try:
+                await bot.delete_message(user.tg_id, invoice_message_id)
+            except Exception:  # noqa: BLE001
+                pass
         action = context.get("action")
         if action in {"onboarding", "add_device"}:
             tariff_code = context["tariff_code"]
