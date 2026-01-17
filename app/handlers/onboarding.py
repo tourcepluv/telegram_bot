@@ -199,6 +199,30 @@ async def skip_name(query: CallbackQuery, state: FSMContext, session: AsyncSessi
 
 @router.message(OnboardingState.choosing_name)
 async def name_entered(message: Message, state: FSMContext, session: AsyncSession) -> None:
+    if message.text in {
+        "💰 Баланс",
+        "📱 Мои устройства",
+        "➕ Добавить устройство",
+        "💳 Пополнить",
+        "🎁 Пригласить друга",
+        "🆘 Помощь",
+    }:
+        await state.clear()
+        from app.handlers import menu
+
+        if message.text == "💰 Баланс":
+            await menu.balance_view(message, session, state)
+        elif message.text == "📱 Мои устройства":
+            await menu.devices_menu(message, session, state)
+        elif message.text == "➕ Добавить устройство":
+            await menu.add_device(message, state)
+        elif message.text == "💳 Пополнить":
+            await menu.topup_menu(message, session, state)
+        elif message.text == "🎁 Пригласить друга":
+            await menu.referral_view(message, session, state)
+        elif message.text == "🆘 Помощь":
+            await menu.help_view(message, state)
+        return
     display_name = message.text.strip()
     await _finish_device_setup(message, state, display_name, session)
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
