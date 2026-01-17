@@ -36,4 +36,8 @@ async def start_handler(message: Message, session: AsyncSession, state: FSMConte
 
     await state.clear()
     await message.answer(START_MESSAGE, reply_markup=start_button())
-    await message.answer("Меню доступно по кнопке ниже.", reply_markup=main_menu())
+    try:
+        temp_message = await message.answer(" ", reply_markup=main_menu())
+        await temp_message.delete()
+    except Exception:  # noqa: BLE001
+        pass
