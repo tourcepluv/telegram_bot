@@ -76,9 +76,10 @@ async def devices_menu(message: Message, session: AsyncSession, state: FSMContex
 
 @router.callback_query(F.data == "open_devices")
 async def open_devices_callback(query: CallbackQuery, session: AsyncSession) -> None:
-    from app.handlers.devices import show_devices
+    from app.handlers.devices import show_devices_for_user
 
-    await show_devices(query.message, session)
+    user = await get_or_create_user(session, query.from_user.id, query.from_user.username, secrets.token_hex(4))
+    await show_devices_for_user(query.message.chat.id, user.id, session, query.bot)
     await query.answer()
 
 

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import TARIFFS
 from app.content.instructions import get_instruction
-from app.content.texts import DEVICES_HEADER, SUBSCRIPTION_MESSAGE
+from app.content.texts import DEVICES_HEADER, SUBSCRIPTION_MESSAGE, SUBSCRIPTION_RETRIEVE_MESSAGE
 from app.db.repo import (
     delete_device,
     get_device,
@@ -58,11 +58,15 @@ async def _render_devices_list(session: AsyncSession, user_id: int) -> str:
     return "\n\n".join(lines)
 
 
+async def show_devices_for_user(chat_id: int, user_id: int, session: AsyncSession, bot: Bot) -> None:
+    text = await _render_devices_list(session, user_id)
+    devices = await list_user_devices(session, user_id)
+    await bot.send_message(chat_id, text, reply_markup=devices_overview_keyboard(bool(devices)))
+
+
 async def show_devices(message: Message, session: AsyncSession) -> None:
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
-    text = await _render_devices_list(session, user.id)
-    devices = await list_user_devices(session, user.id)
-    await message.answer(text, reply_markup=devices_overview_keyboard(bool(devices)))
+    await show_devices_for_user(message.chat.id, user.id, session, message.bot)
 
 
 @router.callback_query(F.data == "devices_manage")
@@ -91,11 +95,6 @@ async def devices_add(query: CallbackQuery, state: FSMContext) -> None:
     await query.answer()
 
 
-@router.message(F.text == "📱 Мои устройства")
-async def devices_overview(message: Message, session: AsyncSession) -> None:
-    await show_devices(message, session)
-
-
 @router.callback_query(DeviceSelectCallback.filter())
 async def device_selected(query: CallbackQuery, callback_data: DeviceSelectCallback, session: AsyncSession) -> None:
     await query.message.answer("Выберите действие:", reply_markup=devices_actions_keyboard(callback_data.device_id))
@@ -119,7 +118,7 @@ async def device_action(
     if callback_data.action == "subscription":
         if device.subscription_url:
             await query.message.answer(
-                SUBSCRIPTION_MESSAGE.format(subscription_url=device.subscription_url),
+                SUBSCRIPTION_RETRIEVE_MESSAGE.format(subscription_url=device.subscription_url),
                 disable_web_page_preview=True,
             )
         else:
@@ -129,7 +128,7 @@ async def device_action(
                 if subscription_url:
                     await update_device_subscription(session, device.id, subscription_url)
                     await query.message.answer(
-                        SUBSCRIPTION_MESSAGE.format(subscription_url=subscription_url),
+                        SUBSCRIPTION_RETRIEVE_MESSAGE.format(subscription_url=subscription_url),
                         disable_web_page_preview=True,
                     )
             except Exception as exc:  # noqa: BLE001
@@ -158,7 +157,7 @@ async def device_action(
             if subscription_url:
                 await update_device_subscription(session, device.id, subscription_url)
                 await query.message.answer(
-                    SUBSCRIPTION_MESSAGE.format(subscription_url=subscription_url),
+                    SUBSCRIPTION_RETRIEVE_MESSAGE.format(subscription_url=subscription_url),
                     disable_web_page_preview=True,
                 )
         except Exception as exc:  # noqa: BLE001
