@@ -24,6 +24,3 @@ class TopUpCallback(CallbackData, prefix="topup"):
     amount: int
     context: str
 
-
-class SubscriptionCopyCallback(CallbackData, prefix="copy_sub"):
-    device_id: int

@@ -8,7 +8,6 @@ from app.keyboards.callbacks import (
     DeviceActionCallback,
     DeviceSelectCallback,
     PlatformCallback,
-    SubscriptionCopyCallback,
     TariffCallback,
     TopUpCallback,
 )
@@ -130,14 +129,6 @@ def promo_prompt_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="🎟 Ввести промокод", callback_data="promo_enter")],
             [InlineKeyboardButton(text="Пропустить", callback_data="promo_skip")],
-        ]
-    )
-
-
-def copy_subscription_keyboard(device_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="📋 Скопировать", callback_data=SubscriptionCopyCallback(device_id=device_id).pack())],
         ]
     )
 

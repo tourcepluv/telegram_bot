@@ -19,9 +19,8 @@ from app.db.repo import (
     update_device_subscription,
     update_device_tariff,
 )
-from app.keyboards.callbacks import DeviceActionCallback, DeviceSelectCallback, SubscriptionCopyCallback, TariffCallback
+from app.keyboards.callbacks import DeviceActionCallback, DeviceSelectCallback, TariffCallback
 from app.keyboards.inline import (
-    copy_subscription_keyboard,
     devices_actions_keyboard,
     devices_list_keyboard,
     devices_overview_keyboard,
@@ -120,7 +119,7 @@ async def device_action(
         if device.subscription_url:
             await query.message.answer(
                 SUBSCRIPTION_MESSAGE.format(subscription_url=device.subscription_url),
-                reply_markup=copy_subscription_keyboard(device.id),
+                disable_web_page_preview=True,
             )
         else:
             try:
@@ -130,7 +129,7 @@ async def device_action(
                     await update_device_subscription(session, device.id, subscription_url)
                     await query.message.answer(
                         SUBSCRIPTION_MESSAGE.format(subscription_url=subscription_url),
-                        reply_markup=copy_subscription_keyboard(device.id),
+                        disable_web_page_preview=True,
                     )
             except Exception as exc:  # noqa: BLE001
                 print(f"Marzban fetch error: {exc}")
@@ -158,7 +157,7 @@ async def device_action(
                 await update_device_subscription(session, device.id, subscription_url)
                 await query.message.answer(
                     SUBSCRIPTION_MESSAGE.format(subscription_url=subscription_url),
-                    reply_markup=copy_subscription_keyboard(device.id),
+                    disable_web_page_preview=True,
                 )
         except Exception as exc:  # noqa: BLE001
             print(f"Marzban reissue error: {exc}")
@@ -175,20 +174,6 @@ async def device_action(
             await release_server(session, tag)
         await query.message.answer("Устройство удалено.")
     await query.answer()
-
-
-@router.callback_query(SubscriptionCopyCallback.filter())
-async def subscription_copy(
-    query: CallbackQuery,
-    callback_data: SubscriptionCopyCallback,
-    session: AsyncSession,
-) -> None:
-    device = await get_device(session, callback_data.device_id)
-    if not device or not device.subscription_url:
-        await query.answer("Ссылка не найдена.", show_alert=True)
-        return
-    await query.message.answer(device.subscription_url, disable_web_page_preview=True)
-    await query.answer("Ссылка отправлена.")
 
 
 @router.callback_query(DeviceState.changing_tariff, TariffCallback.filter())
@@ -247,7 +232,7 @@ async def send_subscription_and_instruction(
     await bot.send_message(
         user_id,
         SUBSCRIPTION_MESSAGE.format(subscription_url=device.subscription_url),
-        reply_markup=copy_subscription_keyboard(device.id),
+        disable_web_page_preview=True,
     )
     await bot.send_message(
         user_id,
