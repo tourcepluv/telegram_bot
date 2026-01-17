@@ -52,8 +52,7 @@ async def _render_devices_list(session: AsyncSession, user_id: int) -> str:
         lines.append(
             f"{index}. {device.display_name}\n"
             f"{tariff.name} — {tariff.monthly_price_rub} ₽/мес\n"
-            f"{status}\n"
-            f"Стоимость в день: {daily:.2f} ₽"
+            f"{status}"
         )
     return "\n\n".join(lines)
 
