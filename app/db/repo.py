@@ -182,6 +182,15 @@ async def list_promo_redemptions_in_period(session: AsyncSession, start_at: dt.d
     return list(result.scalars().all())
 
 
+async def delete_promo(session: AsyncSession, promo_id: int) -> None:
+    result = await session.execute(select(PromoCode).where(PromoCode.id == promo_id))
+    promo = result.scalar_one_or_none()
+    if not promo:
+        return
+    await session.delete(promo)
+    await session.commit()
+
+
 async def get_payment_by_provider_id(session: AsyncSession, provider_payment_id: str) -> Payment | None:
     result = await session.execute(select(Payment).where(Payment.provider_payment_id == provider_payment_id))
     return result.scalar_one_or_none()

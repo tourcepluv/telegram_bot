@@ -8,6 +8,7 @@ from app.keyboards.callbacks import (
     DeviceActionCallback,
     DeviceSelectCallback,
     PlatformCallback,
+    PromoDeleteCallback,
     TariffCallback,
     TopUpCallback,
 )
@@ -146,6 +147,8 @@ def admin_reports_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="📊 Отчёт: Воронка и оплаты", callback_data="admin_report:funnel")],
             [InlineKeyboardButton(text="🎟 Отчёт: Промокоды", callback_data="admin_report:promos")],
+            [InlineKeyboardButton(text="➕ Создать промокод", callback_data="admin_promo_create")],
+            [InlineKeyboardButton(text="🎟 Промокоды", callback_data="admin_promo_list")],
             [InlineKeyboardButton(text="⚙️ Настройки периода", callback_data="admin_period")],
         ]
     )
@@ -158,5 +161,13 @@ def admin_period_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="Вчера", callback_data="admin_period:yesterday")],
             [InlineKeyboardButton(text="7 дней", callback_data="admin_period:7d")],
             [InlineKeyboardButton(text="30 дней", callback_data="admin_period:30d")],
+        ]
+    )
+
+
+def promo_delete_keyboard(promo_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🗑 Удалить промокод", callback_data=PromoDeleteCallback(promo_id=promo_id).pack())]
         ]
     )

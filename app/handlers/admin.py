@@ -16,6 +16,7 @@ from app.db.models import Payment
 from app.db.repo import (
     create_promo,
     create_server,
+    delete_promo,
     get_payment_sum,
     list_events_counts,
     list_last_event_counts,
@@ -26,7 +27,8 @@ from app.db.repo import (
     list_servers,
     list_users_created_in_period,
 )
-from app.keyboards.inline import admin_period_keyboard, admin_reports_keyboard
+from app.keyboards.callbacks import PromoDeleteCallback
+from app.keyboards.inline import admin_period_keyboard, admin_reports_keyboard, promo_delete_keyboard
 
 
 router = Router()
@@ -39,6 +41,7 @@ def _is_admin(user_id: int) -> bool:
 class AdminState(StatesGroup):
     entering_password = State()
     entering_period = State()
+    entering_promo_code = State()
 
 
 @router.message(Command("admin_stats"))
@@ -142,6 +145,46 @@ async def admin_period_menu(query: CallbackQuery) -> None:
     if not _is_admin(query.from_user.id):
         return
     await query.message.answer("Выберите период:", reply_markup=admin_period_keyboard())
+    await query.answer()
+
+
+@router.callback_query(F.data == "admin_promo_create")
+async def admin_promo_create(query: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(query.from_user.id):
+        return
+    await state.set_state(AdminState.entering_promo_code)
+    await query.message.answer("Введите код промокода:")
+    await query.answer()
+
+
+@router.message(AdminState.entering_promo_code)
+async def admin_promo_code_entered(message: Message, state: FSMContext, session: AsyncSession) -> None:
+    if not _is_admin(message.from_user.id):
+        await state.clear()
+        return
+    code = message.text.strip()
+    if not code:
+        await message.answer("Введите непустой код промокода.")
+        return
+    promo = await create_promo(session, code, settings.promo_bonus_rub * 100, None, None)
+    await message.answer(f"Промокод {promo.code} создан.", reply_markup=admin_reports_keyboard())
+    await state.clear()
+
+
+@router.callback_query(F.data == "admin_promo_list")
+async def admin_promo_list(query: CallbackQuery, session: AsyncSession) -> None:
+    if not _is_admin(query.from_user.id):
+        return
+    promos = await list_promos(session)
+    if not promos:
+        await query.message.answer("Промокоды не найдены.")
+        await query.answer()
+        return
+    for promo in promos:
+        await query.message.answer(
+            f"{promo.code} — бонус {promo.bonus_kopeks // 100} ₽",
+            reply_markup=promo_delete_keyboard(promo.id),
+        )
     await query.answer()
 
 
@@ -314,4 +357,13 @@ async def admin_report_promos(query: CallbackQuery, state: FSMContext, session: 
             f"{data['code']} — вводов: {entered}, users: {users_count}, оплат: {paid} (₽{revenue}), CR: {cr}%"
         )
     await query.message.answer("\n".join(lines))
+    await query.answer()
+
+
+@router.callback_query(PromoDeleteCallback.filter())
+async def admin_promo_delete(query: CallbackQuery, callback_data: PromoDeleteCallback, session: AsyncSession) -> None:
+    if not _is_admin(query.from_user.id):
+        return
+    await delete_promo(session, callback_data.promo_id)
+    await query.message.answer("Промокод удалён.")
     await query.answer()

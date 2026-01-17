@@ -24,3 +24,6 @@ class TopUpCallback(CallbackData, prefix="topup"):
     amount: int
     context: str
 
+
+class PromoDeleteCallback(CallbackData, prefix="promo_delete"):
+    promo_id: int
