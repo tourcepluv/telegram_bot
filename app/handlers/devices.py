@@ -120,7 +120,7 @@ async def device_action(
         if device.subscription_url:
             await query.message.answer(
                 SUBSCRIPTION_MESSAGE.format(subscription_url=device.subscription_url),
-                reply_markup=copy_subscription_keyboard(device.subscription_url),
+                reply_markup=copy_subscription_keyboard(device.id),
             )
         else:
             try:
@@ -130,7 +130,7 @@ async def device_action(
                     await update_device_subscription(session, device.id, subscription_url)
                     await query.message.answer(
                         SUBSCRIPTION_MESSAGE.format(subscription_url=subscription_url),
-                        reply_markup=copy_subscription_keyboard(subscription_url),
+                        reply_markup=copy_subscription_keyboard(device.id),
                     )
             except Exception as exc:  # noqa: BLE001
                 print(f"Marzban fetch error: {exc}")
@@ -158,7 +158,7 @@ async def device_action(
                 await update_device_subscription(session, device.id, subscription_url)
                 await query.message.answer(
                     SUBSCRIPTION_MESSAGE.format(subscription_url=subscription_url),
-                    reply_markup=copy_subscription_keyboard(subscription_url),
+                    reply_markup=copy_subscription_keyboard(device.id),
                 )
         except Exception as exc:  # noqa: BLE001
             print(f"Marzban reissue error: {exc}")
@@ -178,8 +178,16 @@ async def device_action(
 
 
 @router.callback_query(SubscriptionCopyCallback.filter())
-async def subscription_copy(query: CallbackQuery, callback_data: SubscriptionCopyCallback) -> None:
-    await query.message.answer(callback_data.url, disable_web_page_preview=True)
+async def subscription_copy(
+    query: CallbackQuery,
+    callback_data: SubscriptionCopyCallback,
+    session: AsyncSession,
+) -> None:
+    device = await get_device(session, callback_data.device_id)
+    if not device or not device.subscription_url:
+        await query.answer("Ссылка не найдена.", show_alert=True)
+        return
+    await query.message.answer(device.subscription_url, disable_web_page_preview=True)
     await query.answer("Ссылка отправлена.")
 
 
@@ -239,7 +247,7 @@ async def send_subscription_and_instruction(
     await bot.send_message(
         user_id,
         SUBSCRIPTION_MESSAGE.format(subscription_url=device.subscription_url),
-        reply_markup=copy_subscription_keyboard(device.subscription_url),
+        reply_markup=copy_subscription_keyboard(device.id),
     )
     await bot.send_message(
         user_id,

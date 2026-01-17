@@ -134,10 +134,10 @@ def promo_prompt_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def copy_subscription_keyboard(subscription_url: str) -> InlineKeyboardMarkup:
+def copy_subscription_keyboard(device_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📋 Скопировать", callback_data=SubscriptionCopyCallback(url=subscription_url).pack())],
+            [InlineKeyboardButton(text="📋 Скопировать", callback_data=SubscriptionCopyCallback(device_id=device_id).pack())],
         ]
     )
 

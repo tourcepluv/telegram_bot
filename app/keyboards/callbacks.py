@@ -26,4 +26,4 @@ class TopUpCallback(CallbackData, prefix="topup"):
 
 
 class SubscriptionCopyCallback(CallbackData, prefix="copy_sub"):
-    url: str
+    device_id: int
