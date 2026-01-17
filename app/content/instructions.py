@@ -52,7 +52,7 @@ def get_instruction(platform: str, subscription_url: str) -> str:
     if platform == "windows":
         return (
             "💻 Настройка VPN на Windows\n\n"
-            "1. Скачайте и установите v2raytun:\n"
+            "1. Скачайте и установите NekoBox:\n"
             "🔗 https://disk.yandex.ru/d/4t4dFk4tHJPmVg\n\n"
             "2. Скопируйте вашу конфигурацию:\n\n"
             "👇🏻Чтобы скопировать просто нажми на ссылку\n"
