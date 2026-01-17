@@ -85,6 +85,7 @@ async def promo_skip(query: CallbackQuery, session: AsyncSession, state: FSMCont
     user = await get_or_create_user(session, query.from_user.id, query.from_user.username, secrets.token_hex(4))
     await set_user_flags(session, user.id, has_seen_promo_prompt=True)
     await log_event(session, user.id, "promo_skipped")
+    await state.set_state(OnboardingState.choosing_tariff)
     await query.message.answer("Если что — промокод можно будет ввести позже в поддержке.")
     prompt = await query.message.answer(tariffs_message(), reply_markup=tariffs_keyboard())
     await state.update_data(tariffs_message_id=prompt.message_id)
