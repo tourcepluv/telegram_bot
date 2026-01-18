@@ -267,7 +267,13 @@ async def _finish_device_setup(message: Message, state: FSMContext, display_name
         "offer_url": settings.offer_url,
     }
     current_daily_cost = await get_daily_cost(session, user.id)
-    allow_skip_topup = user.balance_kopeks >= current_daily_cost + _daily_cost_for_tariff(tariff.code)
+    total_daily_cost = current_daily_cost + _daily_cost_for_tariff(tariff.code)
+    allow_skip_topup = user.balance_kopeks >= total_daily_cost
+    if total_daily_cost > 0:
+        days_left = user.balance_kopeks // total_daily_cost
+    else:
+        days_left = "—"
+    user_data["days_left"] = days_left
     ready_message = await message.answer(
         NEARLY_READY.format(**user_data),
         reply_markup=nearly_ready_keyboard(allow_skip_topup),
