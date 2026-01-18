@@ -14,13 +14,16 @@ from app.constants import AUTO_NAME_PREFIX, PLATFORM_LABELS, TARIFFS
 from app.content.texts import NEARLY_READY, PROMO_PROMPT, STEP_DEVICE, STEP_NAME_TEMPLATE, tariffs_message
 from app.db.repo import (
     count_promo_redemptions,
+    create_device,
     get_or_create_user,
     get_promo,
+    get_daily_cost,
     has_user_redeemed,
     log_event,
     redeem_promo,
     save_payment,
     set_user_flags,
+    update_device_subscription,
     update_user_balance,
 )
 from app.keyboards.callbacks import PlatformCallback, TariffCallback, TopUpCallback
@@ -33,7 +36,9 @@ from app.keyboards.inline import (
     topup_amounts_keyboard,
 )
 from app.keyboards.reply import main_menu
+from app.marzban.client import MarzbanClient
 from app.payments.yookassa_client import YooKassaClient
+from app.servers.allocator import allocate_server, release_server
 
 
 router = Router()
@@ -72,6 +77,11 @@ async def _handle_menu_shortcut(message: Message, state: FSMContext, session: As
 
 def _generate_internal_code() -> str:
     return secrets.token_hex(6)
+
+
+def _daily_cost_for_tariff(tariff_code: str) -> int:
+    tariff = TARIFFS[tariff_code]
+    return int((tariff.monthly_price_rub * 100 + 29) // 30)
 
 
 def _build_auto_name(platform: str) -> str:
@@ -256,9 +266,11 @@ async def _finish_device_setup(message: Message, state: FSMContext, display_name
         "balance": user.balance_kopeks // 100,
         "offer_url": settings.offer_url,
     }
+    current_daily_cost = await get_daily_cost(session, user.id)
+    allow_skip_topup = user.balance_kopeks >= current_daily_cost + _daily_cost_for_tariff(tariff.code)
     ready_message = await message.answer(
         NEARLY_READY.format(**user_data),
-        reply_markup=nearly_ready_keyboard(),
+        reply_markup=nearly_ready_keyboard(allow_skip_topup),
         disable_web_page_preview=True,
     )
     await state.update_data(ready_message_id=ready_message.message_id)
@@ -282,6 +294,101 @@ async def topup_prepare(query: CallbackQuery, state: FSMContext, session: AsyncS
     )
     await state.update_data(topup_prompt_id=prompt.message_id)
     await log_event(session, query.from_user.id, "invoice_created")
+    await query.answer()
+
+
+@router.callback_query(F.data == "onboarding_use_balance")
+async def onboarding_use_balance(
+    query: CallbackQuery,
+    state: FSMContext,
+    session: AsyncSession,
+    marzban: MarzbanClient,
+) -> None:
+    data = await state.get_data()
+    required_fields = ("tariff_code", "platform", "display_name", "internal_code")
+    if not all(data.get(field) for field in required_fields):
+        await query.message.answer("Не удалось продолжить. Начните заново через /start.")
+        await state.clear()
+        await query.answer()
+        return
+
+    user = await get_or_create_user(session, query.from_user.id, query.from_user.username, secrets.token_hex(4))
+    tariff_code = data["tariff_code"]
+    current_daily_cost = await get_daily_cost(session, user.id)
+    required_daily = current_daily_cost + _daily_cost_for_tariff(tariff_code)
+    if user.balance_kopeks < required_daily:
+        await query.message.answer("Недостаточно средств для активации. Пополните баланс.")
+        await topup_prepare(query, state, session)
+        return
+
+    prev_id = data.get("ready_message_id")
+    if prev_id and query.message:
+        await query.message.delete()
+
+    platform = data["platform"]
+    display_name = data["display_name"]
+    internal_code = data["internal_code"]
+    marzban_username = f"tg{user.tg_id}_{internal_code}"
+    if tariff_code == "T1":
+        server = await allocate_server(session, "EU")
+        server_tags = [server.tag]
+    elif tariff_code == "T2":
+        server = await allocate_server(session, "RU")
+        server_tags = [server.tag]
+    else:
+        eu_server = await allocate_server(session, "EU")
+        ru_server = await allocate_server(session, "RU")
+        server_tags = [eu_server.tag, ru_server.tag]
+
+    device = await create_device(
+        session=session,
+        owner_id=user.id,
+        display_name=display_name,
+        internal_code=internal_code,
+        platform=platform,
+        tariff_code=tariff_code,
+        marzban_username=marzban_username,
+        server_tags_csv=",".join(server_tags),
+    )
+
+    proxy_list = settings.marzban_proxy_list or ["vless"]
+    proxies: dict[str, dict] = {}
+    if "vless" in proxy_list:
+        proxies["vless"] = {"flow": "xtls-rprx-vision"}
+    if "vmess" in proxy_list:
+        proxies["vmess"] = {}
+    if "shadowsocks" in proxy_list:
+        proxies["shadowsocks"] = {}
+    payload = {
+        "username": marzban_username,
+        "status": "active",
+        "expire": None,
+        "data_limit": 0,
+        "data_limit_reset_strategy": "no_reset",
+        "proxies": proxies,
+        "inbounds": {"vless": server_tags},
+        "note": TARIFFS[tariff_code].name,
+        "level": settings.marzban_level,
+        "limit_ip": settings.marzban_limit_ip,
+    }
+    try:
+        response = await marzban.create_user(payload)
+        subscription_url = response.get("subscription_url")
+        if subscription_url:
+            await update_device_subscription(session, device.id, subscription_url)
+    except Exception as exc:  # noqa: BLE001
+        print(f"Marzban create error: {exc}")
+        for tag in server_tags:
+            await release_server(session, tag)
+        await query.message.answer("Не удалось активировать тариф. Попробуйте позже.")
+        await query.answer()
+        return
+
+    from app.handlers import devices
+
+    await devices.send_subscription_and_instruction(query.bot, user.tg_id, device.id, session)
+    await log_event(session, user.id, "sub_issued")
+    await state.clear()
     await query.answer()
 
 
