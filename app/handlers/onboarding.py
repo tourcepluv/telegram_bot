@@ -259,6 +259,7 @@ async def _finish_device_setup(message: Message, state: FSMContext, display_name
     internal_code = _generate_internal_code()
     await state.update_data(display_name=display_name, internal_code=internal_code)
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
+    await session.refresh(user)
     user_data = {
         "display_name": display_name,
         "tariff_name": tariff.name,
@@ -268,7 +269,7 @@ async def _finish_device_setup(message: Message, state: FSMContext, display_name
     }
     current_daily_cost = await get_daily_cost(session, user.id)
     total_daily_cost = current_daily_cost + _daily_cost_for_tariff(tariff.code)
-    allow_skip_topup = user.balance_kopeks >= total_daily_cost
+    allow_skip_topup = user.balance_kopeks > 0
     if total_daily_cost > 0:
         days_left = user.balance_kopeks // total_daily_cost
     else:
@@ -320,9 +321,7 @@ async def onboarding_use_balance(
 
     user = await get_or_create_user(session, query.from_user.id, query.from_user.username, secrets.token_hex(4))
     tariff_code = data["tariff_code"]
-    current_daily_cost = await get_daily_cost(session, user.id)
-    required_daily = current_daily_cost + _daily_cost_for_tariff(tariff_code)
-    if user.balance_kopeks < required_daily:
+    if user.balance_kopeks <= 0:
         await query.message.answer("Недостаточно средств для активации. Пополните баланс.")
         await topup_prepare(query, state, session)
         return
