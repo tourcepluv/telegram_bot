@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import secrets
 
@@ -17,6 +18,7 @@ from app.billing.scheduler import setup_scheduler
 from app.config import settings
 from app.db.base import Base
 from app.db.repo import (
+    count_rewarded_referrals,
     create_device,
     ensure_servers,
     get_device,
@@ -141,6 +143,15 @@ async def yookassa_webhook(request: Request) -> JSONResponse:
             if referral and not referral.rewarded and payment.amount_kopeks >= settings.ref_min_payment_rub * 100:
                 await update_user_balance(session, referral.inviter_user_id, settings.ref_bonus_rub * 100)
                 await mark_referral_rewarded(session, referral.id)
+                paid_refs = await count_rewarded_referrals(session, referral.inviter_user_id)
+                if paid_refs % 10 == 0:
+                    inviter = await get_user_by_id(session, referral.inviter_user_id)
+                    if inviter:
+                        turbo_active = False
+                        if inviter.turbo_started_at:
+                            turbo_active = dt.datetime.utcnow() < inviter.turbo_started_at + dt.timedelta(hours=72)
+                        bonus = 300 if turbo_active else 150
+                        await update_user_balance(session, inviter.id, bonus * 100)
 
         context = json.loads(payment.context_json)
         invoice_message_id = context.get("invoice_message_id")

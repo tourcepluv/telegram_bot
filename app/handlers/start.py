@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import secrets
 
 from aiogram import Router
@@ -9,7 +10,7 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.content.texts import START_MESSAGE
-from app.db.repo import create_referral, get_or_create_user, list_users, log_event
+from app.db.repo import create_referral, get_or_create_user, list_users, log_event, set_user_flags
 from app.keyboards.inline import start_button
 from app.keyboards.reply import main_menu
 
@@ -27,6 +28,8 @@ async def start_handler(message: Message, session: AsyncSession, state: FSMConte
     ref_code = payload[1] if len(payload) > 1 else ""
     referral_code = _generate_ref_code()
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, referral_code)
+    if user.turbo_started_at is None:
+        await set_user_flags(session, user.id, turbo_started_at=dt.datetime.utcnow())
 
     if ref_code.startswith("ref_"):
         inviter_code = ref_code.replace("ref_", "", 1)

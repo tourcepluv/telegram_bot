@@ -333,6 +333,13 @@ async def mark_referral_rewarded(session: AsyncSession, referral_id: int) -> Non
     await session.commit()
 
 
+async def count_rewarded_referrals(session: AsyncSession, inviter_id: int) -> int:
+    result = await session.execute(
+        select(func.count(Referral.id)).where(Referral.inviter_user_id == inviter_id, Referral.rewarded.is_(True))
+    )
+    return int(result.scalar_one())
+
+
 async def get_daily_cost(session: AsyncSession, user_id: int) -> int:
     devices = await list_active_devices(session, user_id)
     monthly_sum = sum(TARIFFS[device.tariff_code].monthly_price_rub for device in devices)

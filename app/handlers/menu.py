@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import secrets
 
 from aiogram import F, Router
@@ -21,8 +22,10 @@ from app.content.texts import (
     HELP_SLOW_TEXT,
     HELP_SUPPORT_TEXT,
     HELP_WINDOWS_TEXT,
+    REFERRAL_MESSAGE,
+    REFERRAL_MESSAGE_TURBO,
 )
-from app.db.repo import get_daily_cost, get_or_create_user, list_active_devices, list_user_devices
+from app.db.repo import count_rewarded_referrals, get_daily_cost, get_or_create_user, list_active_devices, list_user_devices
 from app.keyboards.inline import (
     balance_keyboard,
     help_back_keyboard,
@@ -34,6 +37,35 @@ from app.handlers.onboarding import OnboardingState
 
 
 router = Router()
+
+
+def _turbo_time_left(started_at: dt.datetime | None) -> tuple[int, int] | None:
+    if not started_at:
+        return None
+    end_at = started_at + dt.timedelta(hours=72)
+    now = dt.datetime.utcnow()
+    if now >= end_at:
+        return None
+    delta = end_at - now
+    hours_left = int(delta.total_seconds() // 3600)
+    minutes_left = int((delta.total_seconds() % 3600) // 60)
+    return hours_left, minutes_left
+
+
+async def _referral_message(user, bot, session: AsyncSession) -> str:
+    paid_refs = await count_rewarded_referrals(session, user.id)
+    me = await bot.get_me()
+    link = f"https://t.me/{me.username}?start=ref_{user.referral_code}"
+    turbo_left = _turbo_time_left(user.turbo_started_at)
+    if turbo_left:
+        hours_left, minutes_left = turbo_left
+        return REFERRAL_MESSAGE_TURBO.format(
+            hours_left=hours_left,
+            minutes_left=minutes_left,
+            paid_refs=paid_refs % 10,
+            ref_link=link,
+        )
+    return REFERRAL_MESSAGE.format(paid_refs=paid_refs % 10, ref_link=link)
 
 
 @router.message(F.text == "💰 Баланс")
@@ -176,13 +208,7 @@ async def open_devices_callback(query: CallbackQuery, session: AsyncSession) -> 
 async def referral_callback(query: CallbackQuery, session: AsyncSession) -> None:
     await query.message.bot.delete_message(query.message.chat.id, query.message.message_id)
     user = await get_or_create_user(session, query.from_user.id, query.from_user.username, secrets.token_hex(4))
-    me = await query.bot.get_me()
-    link = f"https://t.me/{me.username}?start=ref_{user.referral_code}"
-    await query.message.answer(
-        f"🎁 Пригласить друга (+50 ₽)\n{link}\n\n"
-        "Приглашайте друзей и получайте бонусы после их первой оплаты.",
-        reply_markup=main_menu(),
-    )
+    await query.message.answer(await _referral_message(user, query.bot, session), reply_markup=main_menu())
     await query.answer()
 
 
@@ -236,10 +262,4 @@ async def referral_view(message: Message, session: AsyncSession, state: FSMConte
     except Exception:  # noqa: BLE001
         pass
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
-    me = await message.bot.get_me()
-    link = f"https://t.me/{me.username}?start=ref_{user.referral_code}"
-    await message.answer(
-        f"🎁 Пригласить друга (+50 ₽)\n{link}\n\n"
-        "Приглашайте друзей и получайте бонусы после их первой оплаты.",
-        reply_markup=main_menu(),
-    )
+    await message.answer(await _referral_message(user, message.bot, session), reply_markup=main_menu())

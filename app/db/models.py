@@ -22,6 +22,7 @@ class User(Base):
     last_balance_reminder_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
     last_pause_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
     last_pause_reminder_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    turbo_started_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     devices: Mapped[list[Device]] = relationship("Device", back_populates="owner")
 
