@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import secrets
+import urllib.parse
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -57,15 +58,25 @@ async def _referral_message(user, bot, session: AsyncSession) -> str:
     me = await bot.get_me()
     link = f"https://t.me/{me.username}?start=ref_{user.referral_code}"
     turbo_left = _turbo_time_left(user.turbo_started_at)
+    share_link = "https://t.me/share/url?" + urllib.parse.urlencode(
+        {
+            "url": link,
+            "text": "Присоединяйся к PluxVPN — вот ссылка на старт:",
+        }
+    )
     if turbo_left:
         hours_left, minutes_left = turbo_left
+        if hours_left > 0:
+            time_left = f"{hours_left} ч"
+        else:
+            time_left = f"{max(minutes_left, 1)} мин"
         return REFERRAL_MESSAGE_TURBO.format(
-            hours_left=hours_left,
-            minutes_left=minutes_left,
+            time_left=time_left,
             paid_refs=paid_refs % 10,
             ref_link=link,
+            share_link=share_link,
         )
-    return REFERRAL_MESSAGE.format(paid_refs=paid_refs % 10, ref_link=link)
+    return REFERRAL_MESSAGE.format(paid_refs=paid_refs % 10, ref_link=link, share_link=share_link)
 
 
 @router.message(F.text == "💰 Баланс")
