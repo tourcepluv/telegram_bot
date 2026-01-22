@@ -170,7 +170,6 @@ async def promo_code_entered(message: Message, state: FSMContext, session: Async
             return
     await redeem_promo(session, promo.id, user.id)
     user = await update_user_balance(session, user.id, promo.bonus_kopeks)
-    await state.update_data(promo_balance_kopeks=user.balance_kopeks)
     await log_event(session, user.id, "promo_entered", {"code": promo.code})
     await message.answer(
         f"Бонус начислен: {promo.bonus_kopeks // 100} ₽\n💰 Баланс: {user.balance_kopeks // 100} ₽",
@@ -261,19 +260,18 @@ async def _finish_device_setup(message: Message, state: FSMContext, display_name
     await state.update_data(display_name=display_name, internal_code=internal_code)
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
     await session.refresh(user)
-    balance_kopeks = max(user.balance_kopeks, int(data.get("promo_balance_kopeks", 0) or 0))
     user_data = {
         "display_name": display_name,
         "tariff_name": tariff.name,
         "monthly_price": tariff.monthly_price_rub,
-        "balance": balance_kopeks // 100,
+        "balance": user.balance_kopeks // 100,
         "offer_url": settings.offer_url,
     }
     current_daily_cost = await get_daily_cost(session, user.id)
     total_daily_cost = current_daily_cost + _daily_cost_for_tariff(tariff.code)
-    allow_skip_topup = balance_kopeks > 0
+    allow_skip_topup = user.balance_kopeks > 0
     if total_daily_cost > 0:
-        days_left = balance_kopeks // total_daily_cost
+        days_left = user.balance_kopeks // total_daily_cost
     else:
         days_left = "—"
     user_data["days_left"] = days_left
@@ -323,8 +321,7 @@ async def onboarding_use_balance(
 
     user = await get_or_create_user(session, query.from_user.id, query.from_user.username, secrets.token_hex(4))
     tariff_code = data["tariff_code"]
-    balance_kopeks = max(user.balance_kopeks, int(data.get("promo_balance_kopeks", 0) or 0))
-    if balance_kopeks <= 0:
+    if user.balance_kopeks <= 0:
         await query.message.answer("Недостаточно средств для активации. Пополните баланс.")
         await topup_prepare(query, state, session)
         return
