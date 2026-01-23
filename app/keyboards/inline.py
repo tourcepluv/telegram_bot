@@ -58,7 +58,7 @@ def skip_name_keyboard() -> InlineKeyboardMarkup:
 def nearly_ready_keyboard(allow_skip_topup: bool = False) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(text="💳 Пополнить", callback_data="topup_prepare")]]
     if allow_skip_topup:
-        rows.append([InlineKeyboardButton(text="✅ Продолжить", callback_data="onboarding_use_balance")])
+        rows.append([InlineKeyboardButton(text="✅ Продолжить без пополнения", callback_data="onboarding_use_balance")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
