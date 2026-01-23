@@ -67,16 +67,16 @@ async def _referral_message(user, bot, session: AsyncSession) -> str:
     if turbo_left:
         hours_left, minutes_left = turbo_left
         if hours_left > 0:
-            time_left = f"{hours_left} ч"
+            rounded_hours = hours_left + (1 if minutes_left > 0 else 0)
+            time_left = f"{rounded_hours} ч"
         else:
             time_left = f"{max(minutes_left, 1)} мин"
         return REFERRAL_MESSAGE_TURBO.format(
             time_left=time_left,
             paid_refs=paid_refs,
-            ref_link=link,
-            share_link=share_link,
+            ref_link=share_link,
         )
-    return REFERRAL_MESSAGE.format(paid_refs=paid_refs, ref_link=link, share_link=share_link)
+    return REFERRAL_MESSAGE.format(paid_refs=paid_refs, ref_link=share_link)
 
 
 @router.message(F.text == "💰 Баланс")

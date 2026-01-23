@@ -233,7 +233,7 @@ async def skip_name(query: CallbackQuery, state: FSMContext, session: AsyncSessi
     data = await state.get_data()
     platform = data["platform"]
     display_name = _build_auto_name(platform)
-    await _finish_device_setup(query.message, state, display_name, session)
+    await _finish_device_setup(query.message, state, display_name, session, query.from_user.id, query.from_user.username)
     await log_event(session, query.from_user.id, "device_name_skipped")
     await query.answer()
 
@@ -243,12 +243,19 @@ async def name_entered(message: Message, state: FSMContext, session: AsyncSessio
     if await _handle_menu_shortcut(message, state, session):
         return
     display_name = message.text.strip()
-    await _finish_device_setup(message, state, display_name, session)
+    await _finish_device_setup(message, state, display_name, session, message.from_user.id, message.from_user.username)
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
     await log_event(session, user.id, "device_name_entered")
 
 
-async def _finish_device_setup(message: Message, state: FSMContext, display_name: str, session: AsyncSession) -> None:
+async def _finish_device_setup(
+    message: Message,
+    state: FSMContext,
+    display_name: str,
+    session: AsyncSession,
+    tg_id: int,
+    username: str | None,
+) -> None:
     data = await state.get_data()
     prev_id = data.get("name_prompt_id")
     if prev_id:
@@ -259,7 +266,7 @@ async def _finish_device_setup(message: Message, state: FSMContext, display_name
     tariff = TARIFFS[data["tariff_code"]]
     internal_code = _generate_internal_code()
     await state.update_data(display_name=display_name, internal_code=internal_code)
-    user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
+    user = await get_or_create_user(session, tg_id, username, secrets.token_hex(4))
     await session.refresh(user)
     balance_kopeks = await get_user_balance_kopeks(session, user.id)
     user_data = {
