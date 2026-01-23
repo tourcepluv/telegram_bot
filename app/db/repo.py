@@ -33,6 +33,11 @@ async def update_user_balance(session: AsyncSession, user_id: int, delta_kopeks:
     return user
 
 
+async def get_user_balance_kopeks(session: AsyncSession, user_id: int) -> int:
+    result = await session.execute(select(User.balance_kopeks).where(User.id == user_id))
+    return int(result.scalar_one())
+
+
 async def list_user_devices(session: AsyncSession, user_id: int) -> list[Device]:
     result = await session.execute(select(Device).where(Device.owner_id == user_id))
     return list(result.scalars().all())

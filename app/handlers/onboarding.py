@@ -16,6 +16,7 @@ from app.db.repo import (
     count_promo_redemptions,
     create_device,
     get_or_create_user,
+    get_user_balance_kopeks,
     get_promo,
     get_daily_cost,
     has_user_redeemed,
@@ -260,18 +261,19 @@ async def _finish_device_setup(message: Message, state: FSMContext, display_name
     await state.update_data(display_name=display_name, internal_code=internal_code)
     user = await get_or_create_user(session, message.from_user.id, message.from_user.username, secrets.token_hex(4))
     await session.refresh(user)
+    balance_kopeks = await get_user_balance_kopeks(session, user.id)
     user_data = {
         "display_name": display_name,
         "tariff_name": tariff.name,
         "monthly_price": tariff.monthly_price_rub,
-        "balance": user.balance_kopeks // 100,
+        "balance": balance_kopeks // 100,
         "offer_url": settings.offer_url,
     }
     current_daily_cost = await get_daily_cost(session, user.id)
     total_daily_cost = current_daily_cost + _daily_cost_for_tariff(tariff.code)
-    allow_skip_topup = user.balance_kopeks > 0
+    allow_skip_topup = balance_kopeks > 0
     if total_daily_cost > 0:
-        days_left = user.balance_kopeks // total_daily_cost
+        days_left = balance_kopeks // total_daily_cost
     else:
         days_left = "—"
     user_data["days_left"] = days_left
@@ -321,7 +323,8 @@ async def onboarding_use_balance(
 
     user = await get_or_create_user(session, query.from_user.id, query.from_user.username, secrets.token_hex(4))
     tariff_code = data["tariff_code"]
-    if user.balance_kopeks <= 0:
+    balance_kopeks = await get_user_balance_kopeks(session, user.id)
+    if balance_kopeks <= 0:
         await query.message.answer("Недостаточно средств для активации. Пополните баланс.")
         await topup_prepare(query, state, session)
         return
